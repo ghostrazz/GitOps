@@ -49,9 +49,9 @@ spec:
             # treats it as a new release worth analysing. No image rebuild
             # needed, which is the only reason a 2-hour class can do this.
             - name: PODINFO_UI_MESSAGE
-              value: "Namaste from v1 - milk tea"
+              value: "mayalu namastey v-2- milk tea"
             - name: PODINFO_UI_COLOR
-              value: "#34577c"
+              value: "#34ab31"
           livenessProbe:
             exec:
               command: ["podcli", "check", "http", "localhost:9898/healthz"]

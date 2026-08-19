@@ -17,7 +17,7 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/ghostrazz/gitops.git
+    repoURL: https://github.com/ghostrazz/gitOps.git
     targetRevision: main
     path: apps/podinfo
 
