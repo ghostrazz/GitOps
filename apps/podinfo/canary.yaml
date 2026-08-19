@@ -1,0 +1,78 @@
+# CANARY -- shift a slice of real traffic to the new version, watch metrics,
+# widen the slice if healthy, roll back automatically if not.
+#
+# Install:  cp strategies/canary.yaml apps/podinfo/canary.yaml
+#           git rm apps/podinfo/service.yaml
+#           git commit && git push
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: podinfo
+  namespace: chiya
+spec:
+  provider: nginx
+
+  # What Flagger watches. Any change to this Deployment's pod spec -- image,
+  # env var, command, resources -- starts a new analysis.
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: podinfo
+
+  # The Ingress Flagger clones. The clone is named podinfo-canary and carries
+  # nginx.ingress.kubernetes.io/canary-weight, which is the actual mechanism.
+  ingressRef:
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    name: podinfo
+
+  # If the rollout has not finished in this long, fail it.
+  progressDeadlineSeconds: 300
+
+  service:
+    port: 80
+    targetPort: 9898
+
+  analysis:
+    # CLASSROOM TUNING. Production values would be interval 1m, threshold 5,
+    # stepWeight 5 -- a rollout that takes 20-40 minutes on purpose.
+    # These give you a full canary in about 90 seconds.
+    interval: 15s     # how often to evaluate
+    threshold: 5      # how many failed checks before rollback
+    maxWeight: 50     # stop shifting at 50%, then promote
+    stepWeight: 10    # +10% traffic per successful interval
+
+    metrics:
+      # Built-in. Computed from nginx ingress metrics in Flagger's Prometheus.
+      - name: request-success-rate
+        thresholdRange:
+          min: 99      # percent of non-5xx responses
+        interval: 30s
+
+      - name: request-duration
+        thresholdRange:
+          max: 500     # P99 latency in milliseconds
+        interval: 30s
+
+    webhooks:
+      # Runs BEFORE any traffic is shifted. A smoke test against the canary
+      # pods directly. If this fails, no user ever sees the new version.
+      - name: acceptance-test
+        type: pre-rollout
+        url: http://flagger-loadtester.chiya/
+        timeout: 30s
+        metadata:
+          type: bash
+          cmd: "curl -sd 'test' http://podinfo-canary.chiya/token | grep token"
+
+      # Runs DURING the analysis. Generates the traffic that the metrics are
+      # computed from. A canary with no traffic has no signal and will stall.
+      - name: load-test
+        type: rollout
+        url: http://flagger-loadtester.chiya/
+        timeout: 5s
+        metadata:
+          cmd: >-
+            hey -z 2m -q 10 -c 2
+            -host podinfo.chiya.shop
+            http://ingress-nginx-controller.ingress-nginx
