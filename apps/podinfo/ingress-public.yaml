@@ -1,0 +1,21 @@
+# The browser-friendly catch-all. No host, so anything arriving at the NLB
+# hostname lands here. This route always points at the apex Service, which
+# during a canary still means the STABLE version -- exactly what you want a
+# real user to get.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: podinfo-public
+  namespace: chiya
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: podinfo
+                port:
+                  number: 80

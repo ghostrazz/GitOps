@@ -1,0 +1,23 @@
+# BIG BANG / RECREATE -- kill everything, then start everything.
+#
+# This is not a Flagger object. It is a two-line change to the Deployment,
+# which is the point: the simplest strategy needs no extra tooling because it
+# makes no attempt to be safe.
+#
+# Patch apps/podinfo/deployment.yaml to:
+#
+#   spec:
+#     strategy:
+#       type: Recreate
+#
+# ...and delete the entire rollingUpdate block. `Recreate` and
+# `rollingUpdate:` are mutually exclusive; the API server will reject both.
+#
+# When this is actually the right answer:
+#   - a schema migration the old and new code cannot both survive
+#   - a singleton that cannot tolerate two instances (a ReadWriteOnce volume,
+#     a leader that does not do leader election)
+#   - a batch job nobody is watching at 3am
+#
+# What you are accepting: measurable downtime, and a rollback that is
+# another full outage.

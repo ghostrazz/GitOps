@@ -1,0 +1,56 @@
+# BLUE / GREEN -- stand up the new version at full size alongside the old,
+# test it while it serves zero real traffic, then cut 100% of traffic across
+# in one step.
+#
+# Note `provider: kubernetes`. That tells Flagger not to do any weighted
+# traffic splitting at all -- it just flips the apex Service selector from
+# primary to canary when analysis passes. No mesh or ingress weights needed.
+#
+# Because there is no weighted ingress, the built-in request-success-rate
+# metric has nothing to read. Confidence comes from the webhooks instead.
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: podinfo
+  namespace: chiya
+spec:
+  provider: kubernetes
+
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: podinfo
+
+  progressDeadlineSeconds: 300
+
+  service:
+    port: 80
+    targetPort: 9898
+
+  analysis:
+    interval: 15s
+    threshold: 2
+
+    # `iterations` instead of stepWeight/maxWeight is what makes this
+    # blue/green rather than canary: run the checks N times at 0% traffic,
+    # then switch everything at once.
+    iterations: 6
+
+    webhooks:
+      - name: smoke-test
+        type: pre-rollout
+        url: http://flagger-loadtester.chiya/
+        timeout: 30s
+        metadata:
+          type: bash
+          cmd: "curl -sd 'test' http://podinfo-canary.chiya/token | grep token"
+
+      # Hits the green pods directly by their canary Service. Real users are
+      # still 100% on blue while this runs.
+      - name: conformance-test
+        type: rollout
+        url: http://flagger-loadtester.chiya/
+        timeout: 30s
+        metadata:
+          type: bash
+          cmd: "hey -z 10s -q 10 -c 2 http://podinfo-canary.chiya/"

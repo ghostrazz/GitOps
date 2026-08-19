@@ -1,0 +1,21 @@
+# Flagger - Helm values
+# chart: flagger/flagger   namespace: ingress-nginx
+#
+# Flagger is installed INTO the ingress-nginx namespace on purpose: it ships
+# a small Prometheus that scrapes the nginx controller, and same-namespace
+# service discovery keeps the default metricsServer address correct.
+
+meshProvider: nginx
+
+prometheus:
+  # Deploys `flagger-prometheus` with a scrape config for the nginx controller.
+  # If you already run Prometheus (you do, from the o11y module), set this to
+  # false and point metricsServer at it instead.
+  install: true
+
+logLevel: info
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi

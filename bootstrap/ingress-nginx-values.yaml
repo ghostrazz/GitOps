@@ -1,0 +1,36 @@
+# ingress-nginx - Helm values
+# chart: ingress-nginx/ingress-nginx   namespace: ingress-nginx
+#
+# This is the data plane Flagger will drive. Two things matter here:
+#   1. the Service is a LoadBalancer, so we get a public URL
+#   2. Prometheus metrics are on, because Flagger's canary decision is made
+#      from nginx's request metrics. No metrics, no canary.
+
+controller:
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+
+  # Preserve the client IP so nginx metrics and logs are honest.
+  # 'Local' also avoids a second hop between nodes.
+  externalTrafficPolicy: Local
+
+  metrics:
+    enabled: true
+
+  podAnnotations:
+    # Flagger's bundled Prometheus scrapes pods by annotation. If you forget
+    # these, `request-success-rate` returns no data and every canary stalls
+    # with "waiting for metrics".
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "10254"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # One replica is enough for a lab and gets us to Ready faster.
+  replicaCount: 1

@@ -1,0 +1,66 @@
+# A/B TESTING -- route by WHO the user is, not by what percentage they are.
+#
+# The difference from canary in one line: canary picks victims at random,
+# A/B picks them deterministically from the request (header, cookie, session).
+# That matters when you are measuring a behavioural outcome -- you need the
+# same user to see the same variant every time, or your experiment is noise.
+#
+# Flagger translates `match` into nginx's canary-by-header / canary-by-cookie
+# annotations. Traffic weight stays at 0% for everyone else the whole time.
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: podinfo
+  namespace: chiya
+spec:
+  provider: nginx
+
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: podinfo
+
+  ingressRef:
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    name: podinfo
+
+  progressDeadlineSeconds: 300
+
+  service:
+    port: 80
+    targetPort: 9898
+
+  analysis:
+    interval: 15s
+    threshold: 5
+    iterations: 8      # fixed number of rounds, then promote. No weights.
+
+    # Only requests carrying this header reach the new version.
+    #   curl -H "Host: podinfo.chiya.shop" -H "x-canary: insider" http://$INGRESS_HOST/
+    # Swap `headers` for `cookies` to get sticky per-browser assignment:
+    #   cookies:
+    #     canary:
+    #       exact: "insider"
+    match:
+      - headers:
+          x-canary:
+            exact: "insider"
+
+    metrics:
+      - name: request-success-rate
+        thresholdRange:
+          min: 99
+        interval: 30s
+
+    webhooks:
+      - name: load-test
+        type: rollout
+        url: http://flagger-loadtester.chiya/
+        timeout: 5s
+        metadata:
+          cmd: >-
+            hey -z 1m -q 10 -c 2
+            -H 'x-canary: insider'
+            -host podinfo.chiya.shop
+            http://ingress-nginx-controller.ingress-nginx

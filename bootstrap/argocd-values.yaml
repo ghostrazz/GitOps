@@ -1,0 +1,63 @@
+# Argo CD - Helm values
+# chart: argo/argo-cd   namespace: argocd
+#
+# Two lab-specific choices are marked LAB ONLY. Everything else is
+# reasonable for a small real cluster.
+
+global:
+  domain: ""
+
+configs:
+  params:
+    # LAB ONLY: serve plain HTTP so the load balancer URL just works in a
+    # browser with no self-signed certificate warning. In production you
+    # terminate TLS at an ALB/NLB with ACM, or leave this false and let
+    # argocd-server do TLS itself.
+    server.insecure: true
+
+  cm:
+    # Default is 180s. Argo polls Git on this interval, so out of the box a
+    # `git push` can take up to three minutes to land. 30s makes the classroom
+    # demo bearable. The real fix is a GitHub webhook -> argocd-server, which
+    # makes this near-instant.
+    timeout.reconciliation: 30s
+
+    # Show the diff of a resource even when it is out of sync only in fields
+    # we ignore. Useful when we get to the Flagger/replicas fight.
+    application.instanceLabelKey: argocd.argoproj.io/instance
+
+server:
+  service:
+    type: LoadBalancer
+    annotations:
+      # in-tree AWS cloud controller: give me a Network Load Balancer rather
+      # than the legacy Classic ELB.
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+repoServer:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+dex:
+  # No SSO in the lab. Saves a pod.
+  enabled: false
+
+notifications:
+  enabled: false
+
+applicationSet:
+  enabled: false

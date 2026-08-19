@@ -1,0 +1,16 @@
+# Flagger load tester - Helm values
+# chart: flagger/loadtester   namespace: chiya
+#
+# A tiny pod that exposes an HTTP API Flagger calls via webhooks. It has
+# `hey`, `curl`, `bash` and `wrk` inside. It is how a canary generates its
+# own traffic instead of waiting for real users to show up.
+
+cmd:
+  timeout: 1h
+
+logLevel: info
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi

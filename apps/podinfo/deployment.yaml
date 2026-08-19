@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podinfo
+  namespace: chiya
+spec:
+  replicas: 2
+
+  # This block is the whole of "rolling update" as a strategy. Change the two
+  # numbers and you have changed your deployment strategy -- see
+  # strategies/README.md for the other settings that mean something else.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # may run 1 pod above desired during the roll
+      maxUnavailable: 0  # never drop below desired -> zero downtime
+
+  selector:
+    matchLabels:
+      app: podinfo
+
+  template:
+    metadata:
+      labels:
+        app: podinfo
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9797"
+    spec:
+      containers:
+        - name: podinfod
+          image: ghcr.io/stefanprodan/podinfo:6.14.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9898
+              protocol: TCP
+            - name: http-metrics
+              containerPort: 9797
+              protocol: TCP
+          command:
+            - ./podinfo
+            - --port=9898
+            - --port-metrics=9797
+            - --level=info
+          env:
+            # These two are your "version" for the rest of the lab. Change
+            # them, commit, push -- Argo CD rolls it out and (later) Flagger
+            # treats it as a new release worth analysing. No image rebuild
+            # needed, which is the only reason a 2-hour class can do this.
+            - name: PODINFO_UI_MESSAGE
+              value: "Namaste from v1 - milk tea"
+            - name: PODINFO_UI_COLOR
+              value: "#34577c"
+          livenessProbe:
+            exec:
+              command: ["podcli", "check", "http", "localhost:9898/healthz"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["podcli", "check", "http", "localhost:9898/readyz"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 128Mi

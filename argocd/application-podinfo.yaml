@@ -1,0 +1,57 @@
+# The single object that turns a Git folder into a running application.
+#
+# Apply this ONCE by hand:
+#   kubectl apply -f argocd/application-podinfo.yaml
+#
+# Everything after this happens through `git push`.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: podinfo
+  namespace: argocd
+  finalizers:
+    # Deleting the Application also deletes what it created. Without this you
+    # delete the Application and the pods keep running, orphaned.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/ghostrazz/gitops.git
+    targetRevision: main
+    path: apps/podinfo
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: chiya
+
+  syncPolicy:
+    automated:
+      # prune: delete cluster objects whose YAML you removed from Git.
+      #        Without this, Git is only additive and drift accumulates.
+      prune: true
+      # selfHeal: if the live cluster stops matching Git, put it back.
+      #        This is the line that makes `kubectl edit` pointless.
+      selfHeal: true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+    syncOptions:
+      - CreateNamespace=false   # namespace.yaml is in Git, so Git owns it
+
+  # ---------------------------------------------------------------------
+  # Co-existing with Flagger.
+  #
+  # Once a Canary object exists, Flagger scales the source Deployment to 0
+  # (all real traffic is served by podinfo-primary). Git says replicas: 2.
+  # Without this block Argo CD scales it back to 2, Flagger scales it to 0,
+  # forever. Ignore the field and let Flagger win -- it is the field's owner.
+  # ---------------------------------------------------------------------
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: podinfo
+      jsonPointers:
+        - /spec/replicas

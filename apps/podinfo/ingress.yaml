@@ -1,0 +1,23 @@
+# The vhost-based route. This is the one Flagger references (ingressRef) and
+# clones into `podinfo-canary` with weight annotations attached.
+#
+# There is no DNS for podinfo.chiya.shop and there does not need to be --
+# reach it with:  curl -H "Host: podinfo.chiya.shop" http://$INGRESS_HOST/
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: podinfo
+  namespace: chiya
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: podinfo.chiya.shop
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: podinfo
+                port:
+                  number: 80
